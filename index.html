@@ -153,7 +153,7 @@ const SPECIAL_IMAGE='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAYG
 const W=3600,H=2600,world=document.getElementById('world'),player=document.getElementById('player');
 const monstersEl=document.getElementById('monsters');
 // Player is outside the transformed map; movement scrolls the world beneath them.
-let px=1800,py=1300,xp=0,level=1,coins=50,balls=15,berries=5,caught=[],current=null,bonus=0,turnBusy=false,activeBattle=null,seen=new Set();
+let px=1800,py=1300,xp=0,level=1,coins=50,balls=15,berries=5,caught=[],current=null,bonus=0,turnBusy=false,activeBattle=null,seen=new Set(),catchAttempts=0;
 const rarityColor={Common:'#8b949e',Uncommon:'#35a853',Rare:'#3987ff',Epic:'#ad59ed',Legendary:'#f2a900',Mythical:'#f04d9a'};
 function saveGame(){try{localStorage.setItem('neighborhoodPokemonRPG',JSON.stringify({px,py,xp,level,coins,balls,berries,caught,seen:[...seen]}))}catch(e){}}
 function loadGame(){try{const s=JSON.parse(localStorage.getItem('neighborhoodPokemonRPG')||'null');if(!s)return;px=s.px??px;py=s.py??py;xp=s.xp??xp;level=s.level??level;coins=s.coins??coins;balls=s.balls??balls;berries=s.berries??berries;caught=Array.isArray(s.caught)?s.caught:[];seen=new Set(s.seen||[])}catch(e){}}
@@ -265,7 +265,7 @@ addEventListener('keydown',e=>{let k=e.key.toLowerCase();if(k==='w'||e.key==='Ar
 function encounter(el){
  const d=Math.hypot(+el.dataset.x-px,+el.dataset.y-py);
  if(d>145){toast('👣 Walk closer to '+el.kind.name);return}
- current=el;turnBusy=false;
+ current=el;turnBusy=false;catchAttempts=0;
  const k=el.kind;seen.add(k.name);
  const partner=caught.length?{...caught[0],hp:caught[0].hp||caught[0].maxHp||30,maxHp:caught[0].maxHp||caught[0].hp||30}:null;
  activeBattle={kind:k,level:Math.max(1,level+Math.floor(Math.random()*3)-1),maxHp:hpFor(k),hp:0,partner,partnerMax:partner?.maxHp||0};
@@ -310,30 +310,40 @@ document.getElementById('useBerry').onclick=()=>{
  bonus=.18;updateBattleStats();sync();toast('🍓 Berry used — heals your partner and boosts catch chance!');saveGame();
 };
 document.getElementById('throwBall').onclick=()=>{
- if(!current||turnBusy)return;
- if(balls<=0)return toast('🔴 No Pokéballs left');
- balls--;sync();turnBusy=true;
- const fly=document.getElementById('ballFly');fly.style.display='block';fly.style.left='50%';fly.style.top='72%';
- fly.animate([{transform:'translate(-50%,-50%) scale(1)'},{transform:'translate(-50%,-50%) scale(.8) translateY(-220px)'},{transform:'translate(-50%,-50%) scale(.55) translateY(-170px)'}],{duration:500}).finished.then(()=>{
-  fly.style.display='none';if(!current||!activeBattle){turnBusy=false;return}
+ if(!current||!activeBattle||turnBusy)return;
+ if(balls<=0){toast('🔴 No Pokéballs left');return}
+ const battleAtThrow=activeBattle, wildAtThrow=current;
+ balls--;sync();saveGame();turnBusy=true;
+ const fly=document.getElementById('ballFly');
+ fly.style.display='block';fly.style.left='50%';fly.style.top='72%';
+ try{fly.animate([{transform:'translate(-50%,-50%) scale(1)'},{transform:'translate(-50%,-50%) scale(.8) translateY(-220px)'},{transform:'translate(-50%,-50%) scale(.55) translateY(-170px)'}],{duration:450,fill:'forwards'});}catch(e){}
+ setTimeout(()=>{
+  fly.style.display='none';
+  if(activeBattle!==battleAtThrow||current!==wildAtThrow){turnBusy=false;return}
   const b=activeBattle,k=b.kind;
-  const rarityBase={Common:.72,Uncommon:.58,Rare:.42,Epic:.28,Legendary:.16,Mythical:.08}[k.rarity]||.5;
-  const weakened=1-(b.hp/b.maxHp);
-  const chance=Math.min(.96,rarityBase+weakened*.48+bonus);bonus=0;
-  if(Math.random()<chance){
+  catchAttempts++;
+  const rarityBase={Common:.82,Uncommon:.70,Rare:.56,Epic:.43,Legendary:.30,Mythical:.22}[k.rarity]??.65;
+  const weakened=1-Math.max(0,b.hp)/Math.max(1,b.maxHp);
+  const chance=Math.min(.98,rarityBase+weakened*.55+bonus+Math.min(.20,(catchAttempts-1)*.10));
+  bonus=0;
+  document.getElementById('battleLog').textContent=`You threw a Poké Ball! Catch chance: ${Math.round(chance*100)}%.`;
+  if(Math.random()<chance||catchAttempts>=3){
    const c={...k,level:b.level,maxHp:k.base+Math.floor(Math.random()*7),hp:k.base+Math.floor(Math.random()*7),caughtAt:Date.now()};
-   c.hp=c.maxHp;caught.push(c);coins+=k.rarity==='Mythical'?100:k.rarity==='Legendary'?60:k.rarity==='Epic'?30:10;
+   c.hp=c.maxHp;caught.push(c);
+   coins+=k.rarity==='Mythical'?100:k.rarity==='Legendary'?60:k.rarity==='Epic'?30:10;
    addXP(rarityXP(k.rarity));document.getElementById('missionCount').textContent=Math.min(3,caught.length);
-   document.getElementById('battleLog').textContent='Caught '+k.name+'! Added to your collection.';
+   document.getElementById('battleLog').textContent=`✨ Gotcha! ${k.name} was caught!`;
    toast(`✨ ${k.rarity} ${k.name} caught! +${rarityXP(k.rarity)} XP`);
    if(caught.length===3){coins+=50;toast('🏆 First mission complete! +50 coins')}
-   current.remove();const idx=mons.indexOf(current);if(idx>=0)mons.splice(idx,1);
-   setTimeout(()=>{leave();sync();saveGame();spawn(1)},1100);
+   wildAtThrow.remove();const idx=mons.indexOf(wildAtThrow);if(idx>=0)mons.splice(idx,1);
+   sync();saveGame();
+   setTimeout(()=>{if(activeBattle===battleAtThrow)leave();spawn(1);},1000);
   }else{
-   document.getElementById('battleLog').textContent=`Oh no! ${k.name} broke free.`;
-   if(activeBattle.partner)wildAttack();turnBusy=false;updateBattleStats();saveGame();
+   document.getElementById('battleLog').textContent=`Oh no! ${k.name} broke free. Try again!`;
+   if(b.partner&&b.partner.hp>0)wildAttack();
+   turnBusy=false;updateBattleStats();saveGame();
   }
- });
+ },480);
 };
 function modal(title,body){document.getElementById('panel').innerHTML=`<button class="close" onclick="closeModal()">✕</button><h2>${title}</h2>${body}`;document.getElementById('modal').style.display='flex'}function closeModal(){document.getElementById('modal').style.display='none'}
 document.getElementById('bag').onclick=()=>modal('🎒 Inventory',`<div class="grid"><div class="cell"><b>🔴</b>Pokéballs<br>${balls}</div><div class="cell"><b>🍓</b>Berries<br>${berries}</div><div class="cell"><b>🪙</b>Coins<br>${coins}</div></div><h3>Party (${Math.min(6,caught.length)}/6)</h3>${caught.slice(0,6).map((x,i)=>`<div class="row"><span>${x.emoji} ${x.name} <small>Lv ${x.level||1}</small></span><b>${x.hp??x.maxHp??x.base??25}/${x.maxHp??x.base??25} HP</b></div>`).join('')||'<p>No creatures yet. Find one and catch it!</p>'}<p class="small">Berries heal your first partner and increase the next catch chance. Progress saves automatically.</p>`);
