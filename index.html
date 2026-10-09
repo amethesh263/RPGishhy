@@ -250,7 +250,7 @@ if(x<80)m.vx=Math.abs(m.vx);if(x>W-80)m.vx=-Math.abs(m.vx);if(y<80)m.vy=Math.abs
 let nx=clamp(x+m.vx,70,W-70),ny=clamp(y+m.vy,70,H-70);if(collision(nx,ny)){m.vx*=-1;m.vy*=-1}else{x=nx;y=ny}
 m.dataset.x=x;m.dataset.y=y;m.style.left=(x-37)+'px';m.style.top=(y-37)+'px';if(Math.abs(m.vx)>.05)m.querySelector('.bubble').style.transform=`scaleX(${m.vx<0?-1:1})`}
 }
-function camera(){world.style.transform=`translate(calc(-50% + ${innerWidth/2-px}px),calc(-50% + ${innerHeight/2-py}px))`}
+function camera(){world.style.transform=`translate(calc(-50% + ${W/2-px}px),calc(-50% + ${H/2-py}px))`}
 function nearby(){let a=mons.filter(m=>m.isConnected).map(m=>({m,d:Math.hypot(+m.dataset.x-px,+m.dataset.y-py)})).sort((a,b)=>a.d-b.d).slice(0,3);document.getElementById('nearText').innerHTML=a.map(v=>`${v.m.kind.emoji} ${v.m.kind.name} ${Math.round(v.d)}m`).join('<br>')||'None';let mini=document.getElementById('miniMons');mini.innerHTML=a.map(v=>{let x=clamp(v.m.dataset.x/W*145,2,140),y=clamp(v.m.dataset.y/H*105,2,100);return `<i class="mm" style="left:${x}px;top:${y}px"></i>`}).join('');let mp=document.getElementById('miniPlayer');mp.style.left=clamp(px/W*145,2,140)+'px';mp.style.top=clamp(py/H*105,2,100)+'px'}
 function tick(now){let dt=Math.min(40,now-last);last=now;time+=dt;let moving=Math.hypot(joy.x,joy.y)>.05;if(moving){let nx=clamp(px+joy.x*speed,40,W-40),ny=clamp(py+joy.y*speed,40,H-40);if(!collision(nx,py))px=nx;if(!collision(px,ny))py=ny;player.classList.add('walk');if(Math.abs(joy.x)>.2)facing=joy.x>0?1:-1}else player.classList.remove('walk');player.style.left='50%';
 player.style.top='50%';
@@ -264,7 +264,7 @@ addEventListener('keydown',e=>{let k=e.key.toLowerCase();if(k==='w'||e.key==='Ar
 
 function encounter(el){
  const d=Math.hypot(+el.dataset.x-px,+el.dataset.y-py);
- if(d>145){toast('👣 Walk closer to '+el.kind.name);return}
+ if(d>180){toast('👣 Walk closer to '+el.kind.name);return}
  current=el;turnBusy=false;catchAttempts=0;
  const k=el.kind;seen.add(k.name);
  const partner=caught.length?{...caught[0],hp:caught[0].hp||caught[0].maxHp||30,maxHp:caught[0].maxHp||caught[0].hp||30}:null;
